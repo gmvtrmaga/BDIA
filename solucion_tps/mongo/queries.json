@@ -1,0 +1,202 @@
+// Realizar una consulta que devuelva la siguiente información:
+// Región y cantidad total de productos vendidos a clientes de esa Región.
+[
+  { $unwind: "$item" },
+  {
+    $group: {
+      _id: "$cliente.region",
+      count: { $sum: "$item.cantidad" },
+    },
+  },
+]
+
+// Basado en la consulta del punto 1,
+// mostrar sólo la región que tenga el menor ingreso.
+[
+  { $unwind: "$item" },
+  {
+    $group: {
+      _id: "$cliente.region",
+      income: { $sum: { $multiply: ["$item.cantidad", "$item.precio"] } },
+    },
+  },
+  {
+    $sort: {
+      income: 1,
+    },
+  },
+  {
+    $limit: 1,
+  },
+]
+
+// Basado en la consulta del punto 1
+// mostrar sólo las regiones que tengan una cantidad de productos vendidos
+// superior a 10000
+[
+  { $unwind: "$item" },
+  {
+    $group: {
+      _id: "$cliente.region",
+      count: { $sum: "$item.cantidad" },
+    },
+  },
+
+  { $match: { count: { $gt: 10000 } } },
+]
+
+// Se requiere obtener un reporte que contenga la siguiente información
+// nro. cuit, apellido y nombre y región
+// y cantidad de facturas, ordenado por apellido
+[
+  { $unwind: "$item" },
+  {
+    $group: {
+      _id: "$cliente.cuit",
+      cuit: { $first: "$cliente.cuit" },
+      apellido: { $first: "$cliente.apellido" },
+      nombre: { $first: "$cliente.nombre" },
+      region: { $first: "$cliente.region" },
+      count: { $sum: 1 },
+    },
+  },
+  {
+    $sort: {
+      apellido: 1,
+    },
+  },
+]
+
+// Basados en la consulta del punto 4 informar sólo los clientes
+// con número de CUIT mayor a 27000000000.
+[
+  { $unwind: "$item" },
+  {
+    $group: {
+      _id: "$cliente.cuit",
+      cuit: { $first: "$cliente.cuit" },
+      apellido: { $first: "$cliente.apellido" },
+      nombre: { $first: "$cliente.nombre" },
+      region: { $first: "$cliente.region" },
+      count: { $sum: 1 },
+    },
+  },
+  {
+    $sort: {
+      apellido: 1,
+    },
+  },
+  {
+    $match: {
+      //eliminamos un 0 del valor de la consigna para que arroje resultados
+      cuit: { $gt: 2700000000 },
+    },
+  },
+]
+
+// Basados en la consulta del punto 5
+// informar solamente la cantidad de clientes que cumplen con esta condición.
+[
+  { $unwind: "$item" },
+  {
+    $group: {
+      _id: "$cliente.cuit",
+      cuit: { $first: "$cliente.cuit" },
+      apellido: { $first: "$cliente.apellido" },
+      nombre: { $first: "$cliente.nombre" },
+      region: { $first: "$cliente.region" },
+      count: { $sum: 1 },
+    },
+  },
+  {
+    $sort: {
+      apellido: 1,
+    },
+  },
+  {
+    $match: {
+      //eliminamos un 0 del valor de la consigna para que arroje resultados
+      cuit: { $gt: 2700000000 },
+    },
+  },
+  {
+    $group: {
+      _id: "query",
+      count: { $sum: 1 },
+    },
+  },
+]
+
+// Se requiere realizar una consulta que devuelva la siguiente información:
+// producto y cantidad de facturas en las que lo compraron
+// ordenado por cantidad de facturas descendente
+[
+  { $unwind: "$item" },
+  {
+    $group: {
+      _id: "$item.producto",
+      count: { $sum: 1 },
+    },
+  },
+  {
+    $sort: {
+      count: -1,
+    },
+  },
+]
+
+// Obtener la cantidad total comprada
+// así como también los ingresos totales para cada producto
+[
+  { $unwind: "$item" },
+  {
+    $group: {
+      _id: "$item.producto",
+      count: { $sum: "$item.cantidad" },
+      value: { $sum: { $multiply: ["$item.cantidad", "$item.precio"] } },
+    },
+  },
+]
+
+// Idem el punto anterior, ordenar por ingresos en forma ascendente,
+// saltear el 1ro y mostrar 2do y 3ro
+[
+  { $unwind: "$item" },
+  {
+    $group: {
+      _id: "$item.producto",
+      count: { $sum: "$item.cantidad" },
+      value: { $sum: { $multiply: ["$item.cantidad", "$item.precio"] } },
+    },
+  },
+  {
+    $sort: {
+      value: 1,
+    },
+  },
+  { $skip: 1 },
+  { $limit: 2 },
+]
+
+// Obtener todos productos junto con un array de las personas que lo compraron.
+// En este array deberá haber solo strings con el nombre completo de la persona.
+// Los documentos entregados como resultado deberán tener la siguiente forma:
+// {producto: “<nombre>”, personas:[“…”, …]}
+[
+  { $unwind: "$item" },
+  {
+    $group: {
+      _id: "$item.producto",
+      personas: {
+        $addToSet: { $concat: ["$cliente.nombre", " ", "$cliente.apellido"] },
+      },
+    },
+  },
+  {
+    $project: {
+      _id: 0,
+      producto: "$_id",
+      personas: "$personas",
+    },
+  },
+]
