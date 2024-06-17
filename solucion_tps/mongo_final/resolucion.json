@@ -1,0 +1,343 @@
+// Número de películas lanzadas cada año
+[
+  //ELIMINAMOS PELICULAS CON FECHA NO NUMERICA
+  {
+    $match: {
+      year: { $type: "number" },
+    },
+  },
+  // AGRUPAMOS POR TITULO PARA FILTRAR REPETIDOS
+  {
+    $group: {
+      _id: "$title",
+      year: { $first: "$year" },
+    },
+  },
+  {
+    $group: {
+      _id: "$year",
+      count: {
+        $sum: 1,
+      },
+    },
+  },
+  {
+    $sort: {
+      _id: -1,
+    },
+  },
+]
+
+// Calificación promedio de IMDb por género
+[
+  // IGNORAR VALORES NO NUMERICOS
+  {
+    $match: {
+      "imdb.rating": { $type: "number" },
+    },
+  },
+  // AGRUPAMOS POR TITULO PARA FILTRAR REPETIDOS
+  {
+    $group: {
+      _id: "$title",
+      rating: { $avg: "$imdb.rating" },
+      genres: { $first: "$genres" },
+    },
+  },
+  { $unwind: "$genres" },
+  {
+    $group: {
+      _id: "$genres",
+      avg_rating: {
+        $avg: "$rating",
+      },
+    },
+  },
+]
+
+// Top 5 películas con más alta calificación en IMDb
+[
+  // IGNORAR VALORES NO NUMERICOS
+  {
+    $match: {
+      "imdb.rating": { $type: "number" },
+    },
+  },
+  // AGRUPAMOS POR TITULO PARA FILTRAR REPETIDOS
+  {
+    $group: {
+      _id: "$title",
+      rating: {
+        $max: "$imdb.rating",
+      },
+    },
+  },
+  {
+    $sort: {
+      rating: -1,
+    },
+  },
+  { $limit: 5 },
+  {
+    $project: {
+      _id: 0,
+      title: "$_id",
+      rating: "$rating",
+    },
+  },
+]
+
+// Número total de películas y duración promedio
+// por director
+[
+  // AGRUPAMOS POR TITULO PARA FILTRAR REPETIDOS
+  {
+    $group: {
+      _id: "$title",
+      directors: { $first: "$directors" },
+      runtime: { $first: "$runtime" },
+    },
+  },
+  { $unwind: "$directors" },
+  {
+    $group: {
+      _id: "$directors",
+      runtime: { $avg: "$runtime" },
+      count: { $sum: 1 },
+    },
+  },
+  {
+    $sort: {
+      count: -1,
+    },
+  },
+]
+
+// Distribución de películas por clasificación MPAA
+[
+  // AGRUPAMOS POR TITULO PARA FILTRAR REPETIDOS
+  {
+    $group: {
+      _id: "$title",
+      rated: { $first: "$rated" },
+    },
+  },
+  {
+    $project: {
+      _id: 0,
+      rated: {
+        $cond: {
+          // AGRUPAMOS LOS NULOS Y NOT RATED EN UNRATED
+          if: {
+            $or: [
+              { $eq: ["$rated", null] },
+              { $eq: [{ $toUpper: "$rated" }, "NOT RATED"] },
+              { $eq: [{ $toUpper: "$rated" }, "UNRATED"] },
+            ],
+          },
+          then: "UNRATED",
+          else: {
+            $cond: {
+              // AGRUPAMOS LOS APPROVED, PASSED Y GP(GENERAL PUBLIC, NO PG = PARENTAL GUIDING)
+              // EN G
+              if: {
+                $or: [
+                  { $eq: [{ $toUpper: "$rated" }, "G"] },
+                  { $eq: [{ $toUpper: "$rated" }, "GP"] },
+                  { $eq: [{ $toUpper: "$rated" }, "PASSED"] },
+                  { $eq: [{ $toUpper: "$rated" }, "APPROVED"] },
+                ],
+              },
+              then: "G",
+              else: "$rated",
+            },
+          },
+        },
+      },
+    },
+  },
+  {
+    $group: {
+      _id: "$rated",
+      count: { $sum: 1 },
+    },
+  },
+  {
+    $sort: {
+      count: -1,
+    },
+  },
+]
+
+// Top 3 países productores de películas
+[
+  // AGRUPAMOS POR TITULO PARA FILTRAR REPETIDOS
+  {
+    $group: {
+      _id: "$title",
+      countries: { $first: "$countries" },
+    },
+  },
+  { $unwind: "$countries" },
+  {
+    $group: {
+      _id: "$countries",
+      count: {
+        $sum: 1,
+      },
+    },
+  },
+  {
+    $sort: {
+      count: -1,
+    },
+  },
+  { $limit: 3 },
+]
+
+// Número promedio de miembros del reparto para películas después del 2000
+[
+  // ELIMINAMOS PELICULAS ANTERIORES AL 2000 Y CON REPARTO NULO
+  {
+    $match: {
+      year: { $type: "number", $gte: 2000 },
+      // considero que toda pelicula tiene que tener reparto
+      // si no tiene es una entrada inválida
+      cast: { $ne: null },
+    },
+  },
+  // AGRUPAMOS POR TITULO PARA FILTRAR REPETIDOS
+  {
+    $group: {
+      _id: "$title",
+      cast: { $first: "$cast" },
+      year: { $first: "$year" },
+    },
+  },
+  // PROYECTAMOS EL NUMERO DE MIEMBROS DEL REPARTO
+  {
+    $project: {
+      _id: 0,
+      year: "$year",
+      castSize: { $size: "$cast" },
+    },
+  },
+  // AGRUPAMOS POR AÑO Y CALCULAMOS EL PROMEDIO
+  {
+    $group: {
+      _id: "$year",
+      average: { $avg: "$castSize" },
+    },
+  },
+  {
+    $sort: {
+      _id: 1,
+    },
+  },
+]
+
+// Calificación promedio de IMDb y número de comentarios para las películas
+[
+  // JOIN TABLA COMENTARIOS
+  {
+    $lookup: {
+      from: "comments",
+      localField: "_id",
+      foreignField: "movie_id",
+      as: "comments",
+    },
+  },
+  // PROYECTAMOS EL NUMERO DE COMENTARIOS
+  {
+    $project: {
+      _id: 0,
+      title: "$title",
+      rating: "$imdb.rating",
+      count: { $size: "$comments" },
+    },
+  },
+  // AGRUPAMOS POR TITULO PARA FILTRAR REPETIDOS
+  {
+    $group: {
+      _id: "$title",
+      rating: { $avg: "$rating" },
+      count: { $sum: "$count" },
+    },
+  },
+  {
+    $sort: {
+      count: -1,
+    },
+  },
+]
+
+// Número total de películas comentadas por usuario
+// CONSULTA REALIZADA EN LA COLECCION COMMENTS
+[
+  {
+    $group: {
+      _id: "$email",
+      movies: { $addToSet: "$movie_id" },
+    },
+  },
+  {
+    $project: {
+      _id: 0,
+      name: "$_id",
+      count: { $size: "$movies" },
+    },
+  },
+  {
+    $sort: {
+      count: -1,
+    },
+  },
+]
+
+// Películas del género "Western" con comentarios previos a 2020
+[
+  {
+    $match: {
+      genres: { $ne: null },
+      $expr: {
+        $in: [
+          "WESTERN",
+          {
+            $map: {
+              // FILTRO DE GENERO WESTERN CASE INSENSITIVE
+              input: "$genres",
+              in: { $toUpper: "$$this" },
+            },
+          },
+        ],
+      },
+    },
+  },
+  // JOIN TABLA COMENTARIOS
+  {
+    $lookup: {
+      from: "comments",
+      localField: "_id",
+      foreignField: "movie_id",
+      as: "comments",
+    },
+  },
+  // FILTRO DE COMENTARIOS ANTERIORES A 2020
+  {
+    $match: {
+      comments: {
+        $elemMatch: {
+          date: { $lt: ISODate("2020-01-01") },
+        },
+      },
+    },
+  },
+  // AGRUPAMOS POR TITULO PARA FILTRAR REPETIDOS
+  {
+    $group: {
+      _id: "$title",
+      genres: { $first: "$genres" },
+      comments: { $addToSet: "$comments" },
+    },
+  },
+]
